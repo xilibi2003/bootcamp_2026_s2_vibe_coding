@@ -1,8 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-contract Bank {
-    address public immutable admin;
+interface IBank {
+    function admin() external view returns (address);
+
+    function balances(address account) external view returns (uint256);
+
+    function deposit() external payable;
+
+    function withdraw() external;
+
+    function getTopDepositors() external view returns (address[3] memory);
+}
+
+contract Bank is IBank {
+    address public override admin;
 
     mapping(address => uint256) public balances;
     address[3] public topDepositors;
@@ -13,6 +25,10 @@ contract Bank {
         uint256 totalAmount
     );
     event Withdrawn(address indexed admin, uint256 amount);
+    event AdminTransferred(
+        address indexed previousAdmin,
+        address indexed newAdmin
+    );
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Bank: caller is not admin");
@@ -27,7 +43,7 @@ contract Bank {
         deposit();
     }
 
-    function deposit() public payable {
+    function deposit() public payable virtual override {
         require(msg.value > 0, "Bank: deposit amount is zero");
 
         balances[msg.sender] += msg.value;
@@ -36,24 +52,32 @@ contract Bank {
         emit Deposited(msg.sender, msg.value, balances[msg.sender]);
     }
 
-    function withdraw() external {
-        if (msg.sender != admin) {
-            return;
-        }
-
+    function withdraw() external virtual override onlyAdmin {
         uint256 amount = address(this).balance;
         require(amount > 0, "Bank: no ETH to withdraw");
 
-        // address payablle
-        // payable(admin).transfer(amount);
         (bool success, ) = payable(admin).call{value: amount}("");
         require(success, "Bank: withdraw failed");
 
         emit Withdrawn(admin, amount);
     }
 
-    function getTopDepositors() external view returns (address[3] memory) {
+    function getTopDepositors()
+        external
+        view
+        override
+        returns (address[3] memory)
+    {
         return topDepositors;
+    }
+
+    function _transferAdmin(address newAdmin) internal {
+        require(newAdmin != address(0), "Bank: new admin is zero address");
+
+        address previousAdmin = admin;
+        admin = newAdmin;
+
+        emit AdminTransferred(previousAdmin, newAdmin);
     }
 
     function _updateTopDepositors(address depositor) private {
@@ -88,5 +112,25 @@ contract Bank {
                 }
             }
         }
+    }
+}
+
+contract BigBank is Bank {
+    uint256 public constant MIN_DEPOSIT = 0.001 ether;
+
+    modifier onlyLargeDeposit() {
+        require(
+            msg.value > MIN_DEPOSIT,
+            "BigBank: deposit amount must exceed 0.001 ether"
+        );
+        _;
+    }
+
+    function deposit() public payable override onlyLargeDeposit {
+        super.deposit();
+    }
+
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        _transferAdmin(newAdmin);
     }
 }
