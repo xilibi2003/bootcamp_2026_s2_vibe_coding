@@ -23,8 +23,6 @@ contract Admin {
 
     receive() external payable {}
 
-    // withdraw() {}
-
     function transferOwner(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Admin: new owner is zero address");
 
@@ -47,3 +45,4 @@ contract Admin {
         emit BankWithdrawal(address(bank), amount);
     }
 }
+

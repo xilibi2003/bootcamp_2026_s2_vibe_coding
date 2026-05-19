@@ -62,3 +62,4 @@ contract TokenBank {
         emit Deposited(user, amount, depositedAmount[user]);
     }
 }
+
