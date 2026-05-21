@@ -3,11 +3,12 @@ pragma solidity ^0.8.24;
 
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC1363Receiver} from "openzeppelin-contracts/contracts/interfaces/IERC1363Receiver.sol";
 import {IERC721Receiver} from "openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol";
 import {BootCampS2} from "./BootCampS2.sol";
 import {MyToken} from "./MyToken.sol";
 
-contract NFTMarket is IERC721Receiver {
+contract NFTMarket is IERC721Receiver, IERC1363Receiver {
     using SafeERC20 for IERC20;
 
     MyToken public immutable token;
@@ -55,6 +56,29 @@ contract NFTMarket is IERC721Receiver {
     }
 
     function buyNFT(uint256 tokenId, uint256 amount) external {
+        _buyNFT(tokenId, amount, msg.sender, false);
+    }
+
+    function onTransferReceived(
+        address,
+        address from,
+        uint256 value,
+        bytes calldata data
+    ) external returns (bytes4) {
+        require(msg.sender == address(token), "NFTMarket: unsupported token");
+
+        uint256 tokenId = abi.decode(data, (uint256));
+        _buyNFT(tokenId, value, from, true);
+
+        return IERC1363Receiver.onTransferReceived.selector;
+    }
+
+    function _buyNFT(
+        uint256 tokenId,
+        uint256 amount,
+        address buyer,
+        bool tokenAlreadyReceived
+    ) internal {
         Listing memory listing = listings[tokenId];
 
         require(listing.seller != address(0), "NFTMarket: nft is not listed");
@@ -62,14 +86,19 @@ contract NFTMarket is IERC721Receiver {
 
         delete listings[tokenId];
 
-        IERC20(address(token)).safeTransferFrom(
-            msg.sender,
-            listing.seller,
-            amount
-        );
-        nft.safeTransferFrom(address(this), msg.sender, tokenId);
+        if (tokenAlreadyReceived) {
+            IERC20(address(token)).safeTransfer(listing.seller, amount);
+        } else {
+            IERC20(address(token)).safeTransferFrom(
+                buyer,
+                listing.seller,
+                amount
+            );
+        }
 
-        emit Sold(msg.sender, listing.seller, tokenId, amount);
+        nft.safeTransferFrom(address(this), buyer, tokenId);
+
+        emit Sold(buyer, listing.seller, tokenId, amount);
     }
 
     function onERC721Received(

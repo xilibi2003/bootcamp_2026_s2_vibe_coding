@@ -63,6 +63,29 @@ contract NFTMarketTest is Test {
         assertEq(nft.ownerOf(tokenId), buyer);
     }
 
+    function testTransferAndCallBuysNFT() public {
+        vm.prank(seller);
+        nft.approve(address(market), tokenId);
+
+        vm.prank(seller);
+        market.list(tokenId, price);
+
+        uint256 sellerBalanceBefore = token.balanceOf(seller);
+
+        vm.prank(buyer);
+        assertTrue(
+            token.transferAndCall(address(market), price, abi.encode(tokenId))
+        );
+
+        (address listedSeller, uint256 listedPrice) = market.listings(tokenId);
+
+        assertEq(listedSeller, address(0));
+        assertEq(listedPrice, 0);
+        assertEq(token.balanceOf(address(market)), 0);
+        assertEq(token.balanceOf(seller), sellerBalanceBefore + price);
+        assertEq(nft.ownerOf(tokenId), buyer);
+    }
+
     function testBuyNFTRequiresExactAmount() public {
         vm.prank(seller);
         nft.approve(address(market), tokenId);
@@ -76,6 +99,18 @@ contract NFTMarketTest is Test {
         vm.expectRevert("NFTMarket: incorrect amount");
         vm.prank(buyer);
         market.buyNFT(tokenId, price - 1);
+    }
+
+    function testTransferAndCallRequiresExactAmount() public {
+        vm.prank(seller);
+        nft.approve(address(market), tokenId);
+
+        vm.prank(seller);
+        market.list(tokenId, price);
+
+        vm.expectRevert("NFTMarket: incorrect amount");
+        vm.prank(buyer);
+        token.transferAndCall(address(market), price - 1, abi.encode(tokenId));
     }
 
     function testListRequiresOwner() public {
