@@ -10,7 +10,7 @@ contract DeployTokenBankScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
 
         vm.startBroadcast(deployerPrivateKey);
-        token = new MyToken();
+        token = new MyToken("ETT");
         tokenBank = new TokenBank(address(token));
         vm.stopBroadcast();
     }

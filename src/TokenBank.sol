@@ -1,19 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-interface IERC20 {
-    function transfer(address to, uint256 value) external returns (bool);
+import {IERC165} from "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC1363Receiver} from "openzeppelin-contracts/contracts/interfaces/IERC1363Receiver.sol";
 
-    function transferFrom(
-        address from,
-        address to,
-        uint256 value
-    ) external returns (bool);
+contract TokenBank is IERC1363Receiver {
+    using SafeERC20 for IERC20;
 
-    function balanceOf(address account) external view returns (uint256);
-}
-
-contract TokenBank {
     IERC20 public immutable token;
     address public admin;
 
@@ -39,27 +34,44 @@ contract TokenBank {
     }
 
     function deposit(uint256 amount) external {
-        _deposit(msg.sender, amount);
+        require(amount > 0, "TokenBank: amount must be greater than zero");
+
+        token.safeTransferFrom(msg.sender, address(this), amount);
+
+        _recordDeposit(msg.sender, amount);
     }
 
     function withdraw() external onlyAdmin {
         uint256 amount = token.balanceOf(address(this));
         require(amount > 0, "TokenBank: no token to withdraw");
 
-        bool success = token.transfer(admin, amount);
-        require(success, "TokenBank: transfer failed");
+        token.safeTransfer(admin, amount);
 
         emit Withdrawn(admin, amount);
     }
 
-    function _deposit(address user, uint256 amount) internal {
-        require(amount > 0, "TokenBank: amount must be greater than zero");
+    function onTransferReceived(
+        address,
+        address from,
+        uint256 value,
+        bytes calldata
+    ) external returns (bytes4) {
+        require(msg.sender == address(token), "TokenBank: unsupported token");
+        require(value > 0, "TokenBank: amount must be greater than zero");
 
-        bool success = token.transferFrom(user, address(this), amount);
-        require(success, "TokenBank: transferFrom failed");
+        _recordDeposit(from, value);
 
+        return IERC1363Receiver.onTransferReceived.selector;
+    }
+
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return
+            interfaceId == type(IERC1363Receiver).interfaceId ||
+            interfaceId == type(IERC165).interfaceId;
+    }
+
+    function _recordDeposit(address user, uint256 amount) internal {
         depositedAmount[user] += amount;
         emit Deposited(user, amount, depositedAmount[user]);
     }
 }
-

@@ -13,11 +13,17 @@ contract TokenBankTest is Test {
     address internal bob = address(0xB0B);
 
     function setUp() public {
-        token = new MyToken();
+        token = new MyToken("ETT");
         tokenBank = new TokenBank(address(token));
 
         assertTrue(token.transfer(alice, 1_000 ether));
         assertTrue(token.transfer(bob, 500 ether));
+    }
+
+    function testTokenMetadata() public view {
+        assertEq(token.name(), "EmmetTestToken");
+        assertEq(token.symbol(), "ETT");
+        assertEq(token.totalSupply(), 100_000 ether);
     }
 
     function testDepositPullsTokensIntoBank() public {
@@ -29,6 +35,14 @@ contract TokenBankTest is Test {
 
         assertEq(token.balanceOf(address(tokenBank)), 300 ether);
         assertEq(tokenBank.depositedAmount(alice), 300 ether);
+    }
+
+    function testTransferAndCallDepositsViaCallback() public {
+        vm.prank(alice);
+        assertTrue(token.transferAndCall(address(tokenBank), 120 ether));
+
+        assertEq(token.balanceOf(address(tokenBank)), 120 ether);
+        assertEq(tokenBank.depositedAmount(alice), 120 ether);
     }
 
     function testWithdrawRequiresAdmin() public {
