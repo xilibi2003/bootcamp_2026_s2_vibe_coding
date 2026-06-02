@@ -14,10 +14,9 @@ forge script script/DeployBank.s.sol:DeployBankScript --rpc-url <RPC_URL> --broa
 ```
 
 
-编写一个新市场合约 NFTMarket, 使用 MyToken 来买 BootCampS2 NFT  , NFTMarket 有两个方法：
-
-list(): NFT 持有者可上架 NFT（设置价格 多少个 TOKEN 购买 NFT  ）
-buyNFT(uint tokenID, uint amount): 编写购买 NFT 方法 ，转入对应的TOKEN，获取对应的  NFT 
 
 
-实现 ERC20 扩展 Token 所要求的接收者方法 tokensReceived ，在 tokensReceived 中实现NFT 购买功能(注意扩展的转账需要添加一个额外数据参数)。
+ 新建 frontend 目录，创建一个前端工程，为 TokenBank 合约添加前端界面：
+1. 显示当前  Token 的余额，并且可以存款到 TokenBank
+2. 存款后显示用户存款金额，同时支持用户取款。
+3. 使用  wagmi  和  react  框架完成

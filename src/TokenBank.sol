@@ -5,12 +5,15 @@ import {IERC165} from "openzeppelin-contracts/contracts/utils/introspection/IERC
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC1363Receiver} from "openzeppelin-contracts/contracts/interfaces/IERC1363Receiver.sol";
+import {IERC20Permit} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import {IPermit2} from "./interfaces/IPermit2.sol";
 
 contract TokenBank is IERC1363Receiver {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable token;
     address public admin;
+    address public constant PERMIT2_ADDRESS = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
 
     mapping(address => uint256) public depositedAmount;
 
@@ -38,6 +41,60 @@ contract TokenBank is IERC1363Receiver {
 
         token.safeTransferFrom(msg.sender, address(this), amount);
 
+        _recordDeposit(msg.sender, amount);
+    }
+
+    function permitDeposit(
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external {
+        require(amount > 0, "TokenBank: amount must be greater than zero");
+
+        IERC20Permit(address(token)).permit(
+            msg.sender,
+            address(this),
+            amount,
+            deadline,
+            v,
+            r,
+            s
+        );
+
+        token.safeTransferFrom(msg.sender, address(this), amount);
+
+        _recordDeposit(msg.sender, amount);
+    }
+
+    function depositWithPermit2(
+        uint256 amount,
+        uint256 nonce,
+        uint256 deadline,
+        bytes calldata signature
+    ) external {
+        require(amount > 0, "TokenBank: amount must be greater than zero");
+
+        // Call permitTransferFrom on Permit2 contract
+        IPermit2(PERMIT2_ADDRESS).permitTransferFrom(
+            IPermit2.PermitTransferFrom({
+                permitted: IPermit2.TokenPermissions({
+                    token: address(token),
+                    amount: amount
+                }),
+                nonce: nonce,
+                deadline: deadline
+            }),
+            IPermit2.SignatureTransferDetails({
+                to: address(this),
+                requestedAmount: amount
+            }),
+            msg.sender,
+            signature
+        );
+
+        // Record the deposit
         _recordDeposit(msg.sender, amount);
     }
 
