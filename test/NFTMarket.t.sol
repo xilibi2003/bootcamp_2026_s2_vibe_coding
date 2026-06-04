@@ -96,7 +96,7 @@ contract NFTMarketTest is Test {
         vm.prank(buyer);
         assertTrue(token.approve(address(market), price));
 
-        vm.expectRevert("NFTMarket: incorrect amount");
+        vm.expectRevert(NFTMarket.NFTMarket_IncorrectAmount.selector);
         vm.prank(buyer);
         market.buyNFT(tokenId, price - 1);
     }
@@ -108,13 +108,13 @@ contract NFTMarketTest is Test {
         vm.prank(seller);
         market.list(tokenId, price);
 
-        vm.expectRevert("NFTMarket: incorrect amount");
+        vm.expectRevert(NFTMarket.NFTMarket_IncorrectAmount.selector);
         vm.prank(buyer);
         token.transferAndCall(address(market), price - 1, abi.encode(tokenId));
     }
 
     function testListRequiresOwner() public {
-        vm.expectRevert("NFTMarket: caller is not owner");
+        vm.expectRevert();
         vm.prank(buyer);
         market.list(tokenId, price);
     }

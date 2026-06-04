@@ -2,25 +2,25 @@
 pragma solidity ^0.8.24;
 
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC1363Receiver} from "openzeppelin-contracts/contracts/interfaces/IERC1363Receiver.sol";
-import {IERC721Receiver} from "openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol";
+import {
+    IERC1363Receiver
+} from "openzeppelin-contracts/contracts/interfaces/IERC1363Receiver.sol";
+import {
+    IERC721Receiver
+} from "openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol";
 import {BootCampS2} from "./BootCampS2.sol";
 import {MyToken} from "./MyToken.sol";
 
 contract NFTMarket is IERC721Receiver, IERC1363Receiver {
-    using SafeERC20 for IERC20;
-
     MyToken public immutable token;
     BootCampS2 public immutable nft;
 
     struct Listing {
-        address seller;
-        uint256 price;
+        address seller; // 160 bits
+        uint96 price; // 96 bits (packed in the same 32-byte slot)
     }
 
     mapping(uint256 tokenId => Listing) public listings;
-
     event Listed(
         address indexed seller,
         uint256 indexed tokenId,
@@ -33,24 +33,30 @@ contract NFTMarket is IERC721Receiver, IERC1363Receiver {
         uint256 price
     );
 
+    error NFTMarket_TokenIsZeroAddress();
+    error NFTMarket_NftIsZeroAddress();
+    error NFTMarket_PriceIsZero();
+    error NFTMarket_PriceTooHigh();
+    error NFTMarket_UnsupportedToken();
+    error NFTMarket_NftIsNotListed();
+    error NFTMarket_IncorrectAmount();
+
     constructor(address tokenAddress, address nftAddress) {
-        require(tokenAddress != address(0), "NFTMarket: token is zero address");
-        require(nftAddress != address(0), "NFTMarket: nft is zero address");
+        if (tokenAddress == address(0)) revert NFTMarket_TokenIsZeroAddress();
+        if (nftAddress == address(0)) revert NFTMarket_NftIsZeroAddress();
 
         token = MyToken(tokenAddress);
         nft = BootCampS2(nftAddress);
     }
 
     function list(uint256 tokenId, uint256 price) external {
-        require(price > 0, "NFTMarket: price is zero");
-        require(nft.ownerOf(tokenId) == msg.sender, "NFTMarket: caller is not owner");
+        if (price == 0) revert NFTMarket_PriceIsZero();
+        if (price > type(uint96).max) revert NFTMarket_PriceTooHigh();
 
-        listings[tokenId] = Listing({
-            seller: msg.sender,
-            price: price
-        });
-
+        // Transfer first to revert early if caller is not owner/approved, saving revert gas
         nft.safeTransferFrom(msg.sender, address(this), tokenId);
+
+        listings[tokenId] = Listing({seller: msg.sender, price: uint96(price)});
 
         emit Listed(msg.sender, tokenId, price);
     }
@@ -65,7 +71,7 @@ contract NFTMarket is IERC721Receiver, IERC1363Receiver {
         uint256 value,
         bytes calldata data
     ) external returns (bytes4) {
-        require(msg.sender == address(token), "NFTMarket: unsupported token");
+        if (msg.sender != address(token)) revert NFTMarket_UnsupportedToken();
 
         uint256 tokenId = abi.decode(data, (uint256));
         _buyNFT(tokenId, value, from, true);
@@ -79,26 +85,24 @@ contract NFTMarket is IERC721Receiver, IERC1363Receiver {
         address buyer,
         bool tokenAlreadyReceived
     ) internal {
-        Listing memory listing = listings[tokenId];
+        Listing storage listing = listings[tokenId];
+        address seller = listing.seller;
+        uint256 price = listing.price;
 
-        require(listing.seller != address(0), "NFTMarket: nft is not listed");
-        require(amount == listing.price, "NFTMarket: incorrect amount");
+        if (seller == address(0)) revert NFTMarket_NftIsNotListed();
+        if (amount != price) revert NFTMarket_IncorrectAmount();
 
         delete listings[tokenId];
 
         if (tokenAlreadyReceived) {
-            IERC20(address(token)).safeTransfer(listing.seller, amount);
+            token.transfer(seller, amount);
         } else {
-            IERC20(address(token)).safeTransferFrom(
-                buyer,
-                listing.seller,
-                amount
-            );
+            token.transferFrom(buyer, seller, amount);
         }
 
         nft.safeTransferFrom(address(this), buyer, tokenId);
 
-        emit Sold(buyer, listing.seller, tokenId, amount);
+        emit Sold(buyer, seller, tokenId, amount);
     }
 
     function onERC721Received(
