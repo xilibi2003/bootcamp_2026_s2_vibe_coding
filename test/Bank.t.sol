@@ -39,7 +39,7 @@ contract BankTest is Test {
         vm.prank(alice);
         bank.deposit{value: 4 ether}();
 
-        address[3] memory topDepositors = bank.getTopDepositors();
+        address[10] memory topDepositors = bank.getTopDepositors();
 
         assertEq(bank.balances(alice), 5 ether);
         assertEq(bank.balances(bob), 3 ether);
@@ -47,6 +47,44 @@ contract BankTest is Test {
         assertEq(topDepositors[0], alice);
         assertEq(topDepositors[1], bob);
         assertEq(topDepositors[2], carol);
+        for (uint256 i = 3; i < 10; i++) {
+            assertEq(topDepositors[i], address(0));
+        }
+    }
+
+    function testTop10DepositorsPruning() public {
+        address[11] memory users;
+        for (uint256 i = 0; i < 11; i++) {
+            users[i] = address(uint160(0x1000 + i));
+            vm.deal(users[i], 100 ether);
+        }
+
+        // Deposit increasing amounts so that they are sorted users[10] down to users[0]
+        for (uint256 i = 0; i < 11; i++) {
+            vm.prank(users[i]);
+            bank.deposit{value: (i + 1) * 1 ether}();
+        }
+
+        address[10] memory topDepositors = bank.getTopDepositors();
+
+        // The top 10 should be users[10] down to users[1]
+        // users[0] should be pruned/not present
+        for (uint256 i = 0; i < 10; i++) {
+            assertEq(topDepositors[i], users[10 - i]);
+        }
+
+        // users[0] currently has 1 ether. If they deposit another 11 ether (total 12 ether),
+        // they should become the top depositor, and users[1] (2 ether) should be pruned.
+        vm.prank(users[0]);
+        bank.deposit{value: 11 ether}();
+
+        topDepositors = bank.getTopDepositors();
+        assertEq(topDepositors[0], users[0]);
+        assertEq(topDepositors[1], users[10]);
+
+        for (uint256 i = 0; i < 10; i++) {
+            assertTrue(topDepositors[i] != users[1]);
+        }
     }
 
     function testBankWithdrawRequiresAdmin() public {

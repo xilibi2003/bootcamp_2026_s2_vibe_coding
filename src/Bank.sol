@@ -10,14 +10,16 @@ interface IBank {
 
     function withdraw() external;
 
-    function getTopDepositors() external view returns (address[3] memory);
+    function getTopDepositors() external view returns (address[10] memory);
 }
 
 contract Bank is IBank {
     address public override admin;
 
     mapping(address => uint256) public balances;
-    address[3] public topDepositors;
+    address public constant GUARD = address(1);
+    mapping(address => address) public nextDepositors;
+    uint256 public listSize;
 
     event Deposited(
         address indexed depositor,
@@ -37,6 +39,7 @@ contract Bank is IBank {
 
     constructor() {
         admin = msg.sender;
+        nextDepositors[GUARD] = GUARD;
     }
 
     receive() external payable {
@@ -66,9 +69,18 @@ contract Bank is IBank {
         external
         view
         override
-        returns (address[3] memory)
+        returns (address[10] memory)
     {
-        return topDepositors;
+        address[10] memory top;
+        address curr = GUARD;
+        for (uint256 i = 0; i < 10; i++) {
+            curr = nextDepositors[curr];
+            if (curr == GUARD || curr == address(0)) {
+                break;
+            }
+            top[i] = curr;
+        }
+        return top;
     }
 
     function _transferAdmin(address newAdmin) internal {
@@ -81,37 +93,73 @@ contract Bank is IBank {
     }
 
     function _updateTopDepositors(address depositor) private {
-        for (uint256 i = 0; i < topDepositors.length; i++) {
-            if (topDepositors[i] == depositor) {
-                _sortTopDepositors();
+        // If the depositor is already in the list, remove them first
+        if (nextDepositors[depositor] != address(0)) {
+            _remove(depositor);
+        }
+
+        // If the list is full (has 10 elements) and the depositor's balance
+        // is less than or equal to the tail's balance, it does not qualify.
+        if (listSize == 10) {
+            address tail = _getTail();
+            if (balances[depositor] <= balances[tail]) {
                 return;
             }
         }
 
-        for (uint256 i = 0; i < topDepositors.length; i++) {
-            if (
-                topDepositors[i] == address(0) ||
-                balances[depositor] > balances[topDepositors[i]]
-            ) {
-                for (uint256 j = topDepositors.length - 1; j > i; j--) {
-                    topDepositors[j] = topDepositors[j - 1];
-                }
-                topDepositors[i] = depositor;
-                return;
-            }
+        // Find correct predecessor position
+        address prev = _findPredecessor(balances[depositor]);
+
+        // Insert depositor
+        nextDepositors[depositor] = nextDepositors[prev];
+        nextDepositors[prev] = depositor;
+        listSize++;
+
+        // Prune tail if size exceeds 10
+        if (listSize > 10) {
+            _pruneTail();
         }
     }
 
-    function _sortTopDepositors() private {
-        for (uint256 i = 0; i < topDepositors.length; i++) {
-            for (uint256 j = i + 1; j < topDepositors.length; j++) {
-                if (balances[topDepositors[j]] > balances[topDepositors[i]]) {
-                    address temp = topDepositors[i];
-                    topDepositors[i] = topDepositors[j];
-                    topDepositors[j] = temp;
-                }
-            }
+    function _remove(address depositor) private {
+        address prev = GUARD;
+        while (nextDepositors[prev] != depositor) {
+            prev = nextDepositors[prev];
         }
+        nextDepositors[prev] = nextDepositors[depositor];
+        nextDepositors[depositor] = address(0);
+        listSize--;
+    }
+
+    function _findPredecessor(uint256 balance) private view returns (address) {
+        address curr = GUARD;
+        while (true) {
+            address next = nextDepositors[curr];
+            if (next == GUARD || balances[next] < balance) {
+                return curr;
+            }
+            curr = next;
+        }
+        return GUARD;
+    }
+
+    function _getTail() private view returns (address) {
+        address curr = GUARD;
+        while (nextDepositors[curr] != GUARD) {
+            curr = nextDepositors[curr];
+        }
+        return curr;
+    }
+
+    function _pruneTail() private {
+        address curr = GUARD;
+        for (uint256 i = 0; i < 10; i++) {
+            curr = nextDepositors[curr];
+        }
+        address tail = nextDepositors[curr];
+        nextDepositors[curr] = GUARD;
+        nextDepositors[tail] = address(0);
+        listSize--;
     }
 }
 
