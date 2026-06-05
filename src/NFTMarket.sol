@@ -8,12 +8,15 @@ import {
 import {
     IERC721Receiver
 } from "openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {BootCampS2} from "./BootCampS2.sol";
 import {MyToken} from "./MyToken.sol";
 
-contract NFTMarket is IERC721Receiver, IERC1363Receiver {
-    MyToken public immutable token;
-    BootCampS2 public immutable nft;
+contract NFTMarket is Initializable, OwnableUpgradeable, UUPSUpgradeable, IERC721Receiver, IERC1363Receiver {
+    MyToken public token;
+    BootCampS2 public nft;
 
     struct Listing {
         address seller; // 160 bits
@@ -41,9 +44,16 @@ contract NFTMarket is IERC721Receiver, IERC1363Receiver {
     error NFTMarket_NftIsNotListed();
     error NFTMarket_IncorrectAmount();
 
-    constructor(address tokenAddress, address nftAddress) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address tokenAddress, address nftAddress, address initialOwner) public initializer {
         if (tokenAddress == address(0)) revert NFTMarket_TokenIsZeroAddress();
         if (nftAddress == address(0)) revert NFTMarket_NftIsZeroAddress();
+
+        __Ownable_init(initialOwner);
 
         token = MyToken(tokenAddress);
         nft = BootCampS2(nftAddress);
@@ -113,4 +123,10 @@ contract NFTMarket is IERC721Receiver, IERC1363Receiver {
     ) external pure returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
     }
+
+    function _authorizeUpgrade(address newImplementation)
+        internal
+        override
+        onlyOwner
+    {}
 }

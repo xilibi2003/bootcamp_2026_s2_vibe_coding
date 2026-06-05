@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import {BootCampS2} from "../src/BootCampS2.sol";
 import {MyToken} from "../src/MyToken.sol";
 import {NFTMarket} from "../src/NFTMarket.sol";
+import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 
 contract NFTMarketTest is Test {
     MyToken internal token;
@@ -20,7 +21,16 @@ contract NFTMarketTest is Test {
     function setUp() public {
         token = new MyToken("ETT");
         nft = new BootCampS2();
-        market = new NFTMarket(address(token), address(nft));
+        address marketProxy = Upgrades.deployUUPSProxy(
+            "NFTMarket.sol:NFTMarket",
+            abi.encodeWithSelector(
+                NFTMarket.initialize.selector,
+                address(token),
+                address(nft),
+                address(this)
+            )
+        );
+        market = NFTMarket(marketProxy);
 
         tokenId = nft.mint(seller, "ipfs://example/1.json");
         assertTrue(token.transfer(buyer, 1_000 ether));

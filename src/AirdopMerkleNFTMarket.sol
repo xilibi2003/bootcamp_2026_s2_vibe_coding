@@ -2,9 +2,13 @@
 pragma solidity ^0.8.24;
 
 import {Multicall} from "openzeppelin-contracts/contracts/utils/Multicall.sol";
+import {Context} from "openzeppelin-contracts/contracts/utils/Context.sol";
+import {ContextUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 import {NFTMarket} from "./NFTMarket.sol";
 import {MyPermitToken} from "./MyPermitToken.sol";
 import {MerkleProof} from "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
+import {BootCampS2} from "./BootCampS2.sol";
+import {MyToken} from "./MyToken.sol";
 
 contract AirdopMerkleNFTMarket is Multicall, NFTMarket {
     bytes32 public immutable merkleRoot;
@@ -17,8 +21,23 @@ contract AirdopMerkleNFTMarket is Multicall, NFTMarket {
         address tokenAddress,
         address nftAddress,
         bytes32 _merkleRoot
-    ) NFTMarket(tokenAddress, nftAddress) {
+    ) {
+        token = MyToken(tokenAddress);
+        nft = BootCampS2(nftAddress);
         merkleRoot = _merkleRoot;
+    }
+
+    // Overrides to resolve conflict between Context and ContextUpgradeable
+    function _msgSender() internal view override(Context, ContextUpgradeable) returns (address) {
+        return super._msgSender();
+    }
+
+    function _msgData() internal view override(Context, ContextUpgradeable) returns (bytes calldata) {
+        return super._msgData();
+    }
+
+    function _contextSuffixLength() internal view override(Context, ContextUpgradeable) returns (uint256) {
+        return super._contextSuffixLength();
     }
 
     // permitPrePay with spender argument

@@ -5,6 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {BootCampS2} from "../src/BootCampS2.sol";
 import {MyToken} from "../src/MyToken.sol";
 import {NFTMarket} from "../src/NFTMarket.sol";
+import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 
 contract DeployNFTMarketScript is Script {
     string private constant DEPLOYMENT_PATH =
@@ -28,7 +29,17 @@ contract DeployNFTMarketScript is Script {
         address seller = msg.sender;
         token = new MyToken(symbol);
         nft = new BootCampS2();
-        market = new NFTMarket(address(token), address(nft));
+        bytes memory marketInitData = abi.encodeWithSelector(
+            NFTMarket.initialize.selector,
+            address(token),
+            address(nft),
+            seller
+        );
+        address marketProxy = Upgrades.deployUUPSProxy(
+            "NFTMarket.sol:NFTMarket",
+            marketInitData
+        );
+        market = NFTMarket(marketProxy);
         vm.stopBroadcast();
 
         _writeDeployment(rpcUrl, seller, buyer, token, nft, market);
