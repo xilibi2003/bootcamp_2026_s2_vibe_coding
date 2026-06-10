@@ -127,4 +127,36 @@ contract TokenBankTest is Test {
             adminBalanceBefore + 250 ether
         );
     }
+
+    function testCollectRevertsIfBalanceTooLow() public {
+        // Alice deposits exactly 100 ether (100 * 10**18)
+        vm.prank(alice);
+        assertTrue(token.approve(address(tokenBank), 100 ether));
+        vm.prank(alice);
+        tokenBank.deposit(100 ether);
+
+        vm.expectRevert("TokenBank: balance must be greater than 100 tokens");
+        tokenBank.collect();
+    }
+
+    function testCollectSucceedsIfBalanceAboveThreshold() public {
+        // Alice deposits 101 ether (101 * 10**18)
+        vm.prank(alice);
+        assertTrue(token.approve(address(tokenBank), 101 ether));
+        vm.prank(alice);
+        tokenBank.deposit(101 ether);
+
+        uint256 adminBalanceBefore = token.balanceOf(address(this));
+
+        // Anyone can call collect()
+        vm.prank(bob);
+        tokenBank.collect();
+
+        // 101 ether / 2 = 50.5 ether
+        assertEq(token.balanceOf(address(tokenBank)), 50.5 ether);
+        assertEq(
+            token.balanceOf(address(this)),
+            adminBalanceBefore + 50.5 ether
+        );
+    }
 }

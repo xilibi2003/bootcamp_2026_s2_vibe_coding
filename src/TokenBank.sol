@@ -23,6 +23,7 @@ contract TokenBank is IERC1363Receiver {
         uint256 totalDeposited
     );
     event Withdrawn(address indexed admin, uint256 amount);
+    event Collected(address indexed admin, uint256 amount);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "TokenBank: caller is not admin");
@@ -105,6 +106,16 @@ contract TokenBank is IERC1363Receiver {
         token.safeTransfer(admin, amount);
 
         emit Withdrawn(admin, amount);
+    }
+
+    function collect() external {
+        uint256 balance = token.balanceOf(address(this));
+        require(balance > 100 * 10**18, "TokenBank: balance must be greater than 100 tokens");
+
+        uint256 amount = balance / 2;
+        token.safeTransfer(admin, amount);
+
+        emit Collected(admin, amount);
     }
 
     function onTransferReceived(
