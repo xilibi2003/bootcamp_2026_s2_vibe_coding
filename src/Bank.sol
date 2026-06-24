@@ -92,6 +92,10 @@ contract Bank is IBank {
         emit AdminTransferred(previousAdmin, newAdmin);
     }
 
+    function transferAdmin(address newAdmin) external virtual onlyAdmin {
+        _transferAdmin(newAdmin);
+    }
+
     function _updateTopDepositors(address depositor) private {
         // If the depositor is already in the list, remove them first
         if (nextDepositors[depositor] != address(0)) {
@@ -178,7 +182,7 @@ contract BigBank is Bank {
         super.deposit();
     }
 
-    function transferAdmin(address newAdmin) external onlyAdmin {
+    function transferAdmin(address newAdmin) external override onlyAdmin {
         _transferAdmin(newAdmin);
     }
 }
